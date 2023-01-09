@@ -6,16 +6,20 @@ Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom i
 ## Milestones:
 
 
-### Task 1:
+**Task 1:**
 
 - try basing inpainting model (true model will be developed later in time)
 
 
 
-## End Goals / Plan with associated points (rough outline)
+### End Goals / Plan
 
-1.inpainting 
+ 
 
+| project feature      | points awared | status |
+| ----------- | ----------- | ----------- |
+| Project type: inpainting      | 3       |  :x: |
+| Additional problem: feature detection for targeted inpainting   | 1        |  :x: |
 
 
 
