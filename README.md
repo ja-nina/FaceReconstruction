@@ -1,20 +1,11 @@
-# FaceReconstruction
+# FaceReconstruction :no_mouth:
 
 Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom inpainting.
 
 
-## Milestones:
-
-
-**Task 1:**
-
-- try basing inpainting model (true model will be developed later in time)
-
-
 
 ### End Goals / Plan
-
- 
+ Table of end points:
 
 | project feature      | points awared | status |
 | ----------- | ----------- | ----------- |
@@ -34,10 +25,24 @@ Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom i
 | Additional: MLflow      | 1       |  :x: |
 | Additional: MLOps nr 2      | 1       |  :x: |
 | Additional: Docker      | 1       |  :x: |
+|     |    |   |
 | Sum      | 18       |  :x: |
 
 
 
+## Progress documentation:
+
+
+**9.01.2023 Task 1:**
+
+- try basc inpainting model (true model will be developed later in time)
+- download ułomny dataset 128x128
+
+
+## Possible sources:
+1. MAT: Mask Aware Transformer for Large Hole Image Inpainting | CVPR 2022
+
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; https://www.youtube.com/watch?v=gxD6lKz1cLQ
 
 
 
