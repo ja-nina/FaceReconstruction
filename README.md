@@ -1,6 +1,6 @@
 # FaceReconstruction :no_mouth:
 
-Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom inpainting.
+Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom inpainting. ( right now done on 128x128 - for testing purposes, find the thumbnails on: https://drive.google.com/drive/folders/1tg-Ur7d4vk1T8Bn0pPpUSQPxlPGBlGfv)
 
 
 

@@ -27,13 +27,13 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # load pretrained models
-load_pretrained_models = True
+load_pretrained_models = False
 # number of epochs of training
-n_epochs = 15
-# size of the batches
+n_epochs = 20
+# size of the batches - small so its accurate and nice, but sloww, but i have gpu :)
 batch_size = 16
 # name of the dataset
-dataset_name = 'C:/Users/ismyn/UNI/SEM5/CV/FaceReconstruction/data/00000'
+dataset_name = 'C:/Users/ismyn/UNI/SEM5/CV/FaceReconstruction/data'
 # adam: learning rate
 lr = 0.00008
 # adam: decay of first order momentum of gradient
@@ -55,15 +55,13 @@ sample_interval = 500
 
 class ImageDataset(Dataset):
     def __init__(self, root, transforms_=None, img_size=128, mask_size=64, mode="train"):
-        print("lol")
         self.transform = transforms.Compose(transforms_)
         self.img_size = img_size
         self.mask_size = mask_size
         self.mode = mode
-        self.files = sorted(glob.glob("%s/*.png" % root))
-        
-        #self.files = self.files[:-4000] if mode == "train" else self.files[-4000:]
-        self.files = self.files[:-10] if mode == "train" else self.files[-10:]
+        self.files = sorted(glob.glob("%s/*/*.png" % root))
+        self.files = self.files[:-3000] if mode == "train" else self.files[-3000:] # awful can not be like that - suff
+        #self.files = self.files[:-10] if mode == "train" else self.files[-10:]
 
     def apply_random_mask(self, img):
         """Randomly masks image"""
@@ -125,8 +123,10 @@ class Generator(nn.Module):
             *downsample(64, 64),
             *downsample(64, 128),
             *downsample(128, 256),
-            nn.Conv2d(256, 4000, 1),
-            *upsample(4000, 256),
+            *downsample(256, 512),
+            nn.Conv2d(512, 4000, 1),
+            *upsample(4000, 512),
+            *upsample(512, 256),
             *upsample(256, 128),
             *upsample(128, 64),
             nn.Conv2d(64, channels, 3, 1, 1),
@@ -315,7 +315,7 @@ if __name__ == '__main__':
         title="Generator Adversarial Loss",
         xaxis_title="Number of training examples seen",
         yaxis_title="Gen Adversarial Loss (MSELoss)"),
-    fig.savefig("Generator_Adversarial_loss.png")
+    fig.write_image("plots/Generator_Adversarial_loss.png")
     fig.show()
     
     
@@ -329,7 +329,7 @@ if __name__ == '__main__':
         title="Generator Pixel Loss",
         xaxis_title="Number of training examples seen",
         yaxis_title="Gen Pixel Loss (L1 Loss)"),
-    fig.savefig("Generator_Pixel_loss.png")
+    fig.write_image("plots/Generator_Pixel_loss.png")
     fig.show()
     
     fig = go.Figure()
@@ -341,5 +341,5 @@ if __name__ == '__main__':
         title="Discriminator Loss",
         xaxis_title="Number of training examples seen",
         yaxis_title="Disc Loss (MSELoss)"),
-    fig.savefig("DiscMSE_loss.png")
+    fig.write_image("plots/DiscMSE_loss.png")
     fig.show()
