@@ -33,10 +33,25 @@ Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom i
 ## Progress documentation:
 
 
-**9.01.2023 Task 1:**
+**9.01.2023 Task 1:** :white_check_mark:
 
-- try basc inpainting model (true model will be developed later in time)
+- try basc inpainting model (true model will be developed later in time) 
 - download ułomny dataset 128x128
+
+
+**11.01.2023 Task 2:** 
+
+- Construct basic architecture for experiment ( for example model type + optimizer)
+- Do overfitting experiment (architecture)
+- Discuss and research possible models + look into using a pretrained one
+- discuss git for large data...
+
+
+**11.01.2023 Task 3:** 
+- Masking specific parts of face architecture (using pretrained object detector, objects being parts of face)
+- See if masking specific face parts (mouth , eyes nose etc) makes sense
+
+
 
 
 ## Possible sources:
