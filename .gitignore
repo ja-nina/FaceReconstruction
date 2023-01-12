@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# data folders -  add to s3 or to the DVC thing?
+/data
+/saved_models
+
+# nina
+model_tryout.ipynb
