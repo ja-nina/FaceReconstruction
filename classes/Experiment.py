@@ -10,7 +10,7 @@ from torchvision.utils import save_image, make_grid
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from classes.ImageDataset import ImageDataset
-from config import n_cpu, dataset_name, channels, load_pretrained_models, mask_size, sample_interval, img_size
+from config import n_cpu, dataset_name, channels, load_pretrained_models, mask_size, sample_interval, img_size, patch
 from config import b1, b2, lr # for optimizers
 from tqdm import tqdm
 
@@ -19,6 +19,9 @@ from models.basic_2.Generator import Generator as Generator_basic_2
 
 cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+# Loss function
+adversarial_loss = torch.nn.MSELoss()
+pixelwise_loss = torch.nn.L1Loss()
 
 def weights_init_normal(m):
     classname = m.__class__.__name__
@@ -42,13 +45,15 @@ def save_sample(batches_done, generator, test_dataloader, experiment_name):
     save_image(sample, f"images/{experiment_name}/{batches_done}.png", nrow=6, normalize=True)
 
 default_transforms =  [
-    transforms.Resize((img_size, img_size), Image.BICUBIC),
+    transforms.Resize((img_size, img_size), transforms.InterpolationMode.BICUBIC),
     transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ]
 
 class Experiment(object):
-    def __init__(self, name = 'Basic', batch_size = 16, generator_models = [Generator_basic_2], discriminator_models = [Discriminator_basic_2], optimizer = 'adam'):
+    def __init__(self, name = 'Basic', 
+                 batch_size = 16, 
+                 generator_models = [Generator_basic_2], discriminator_models = [Discriminator_basic_2], optimizer = 'adam', overfittingStudy = False):
         self.name = name
         self.transforms_ = default_transforms
         self.batch_size = batch_size 
@@ -68,13 +73,13 @@ class Experiment(object):
         self.patch = (1, patch_h, patch_w)
         
         self.dataloader = DataLoader(
-            ImageDataset(dataset_name, transforms_=self.transforms_),
+            ImageDataset(dataset_name, transforms_=self.transforms_, overfittingStudy=overfittingStudy),
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=n_cpu,
         )
         self.test_dataloader = DataLoader(
-            ImageDataset(dataset_name, transforms_=self.transforms_, mode="val"),
+            ImageDataset(dataset_name, transforms_=self.transforms_, mode="val", overfittingStudy=overfittingStudy),
             batch_size=12,
             shuffle=True,
             num_workers=1,
@@ -199,7 +204,12 @@ class Experiment(object):
         return self.Discriminator
     
     def set_up(self):
+        self.get_loss()
+        self.get_Generator()
+        self.get_Discriminator() 
+        
         torch.cuda.empty_cache()
+        
         if load_pretrained_models:
             self.Generator.load_state_dict(torch.load(f"saved_models/{self.name}/generator.pth"))
             self.Discriminator.load_state_dict(torch.load(f"saved_models/{self.name}/discriminator.pth"))
@@ -216,8 +226,11 @@ class Experiment(object):
         self.ExperimentLosses = [],[],[],[]
         
         if self._optimizer_type == 'adam':
-            self.Optimizer_D = torch.optim.Adam(self.Generator.parameters(), lr=lr, betas=(b1, b2))
-            self.Optimizer_G = torch.optim.Adam(self.Discriminator.parameters(), lr=lr, betas=(b1, b2))
+            self.Optimizer_G = torch.optim.Adam(self.Generator.parameters(), lr=lr, betas=(b1, b2))
+            self.Optimizer_D = torch.optim.Adam(self.Discriminator.parameters(), lr=lr, betas=(b1, b2))
+        else:
+            self.Optimizer_G = torch.optim.Adam(self.Generator.parameters(), lr=lr, betas=(b1, b2))
+            self.Optimizer_D = torch.optim.Adam(self.Discriminator.parameters(), lr=lr, betas=(b1, b2))
             
         
 
@@ -227,8 +240,8 @@ class Experiment(object):
         for i, (imgs, masked_imgs, masked_parts) in enumerate(tqdm_bar):
             
             # Adversarial ground truths
-            valid = Variable(Tensor(imgs.shape[0], *self.patch).fill_(1.0), requires_grad=False)
-            fake = Variable(Tensor(imgs.shape[0], *self.patch).fill_(0.0), requires_grad=False)
+            valid = Variable(Tensor(imgs.shape[0], *patch).fill_(1.0), requires_grad=False)
+            fake = Variable(Tensor(imgs.shape[0], *patch).fill_(0.0), requires_grad=False)
 
             # Configure input
             imgs = Variable(imgs.type(Tensor))
@@ -242,11 +255,10 @@ class Experiment(object):
             gen_parts = self.Generator(masked_imgs)
 
             # Adversarial and pixelwise loss
-            adversarial_loss, pixelwise_loss = self.Losses
             g_adv = adversarial_loss(self.Discriminator(gen_parts), valid)
             g_pixel = pixelwise_loss(gen_parts, masked_parts)
             # Total loss
-            g_loss = 0.1 * g_adv + 0.9 * g_pixel
+            g_loss = 0.01 * g_adv + 0.99 * g_pixel
 
             g_loss.backward()
             self.Optimizer_G.step()
@@ -257,7 +269,6 @@ class Experiment(object):
             # Measure discriminator's ability to classify real from generated samples
             real_loss = adversarial_loss(self.Discriminator(masked_parts), valid)
             fake_loss = adversarial_loss(self.Discriminator(gen_parts.detach()), fake)
-            
             d_loss = 0.5 * (real_loss + fake_loss)
 
             d_loss.backward()
@@ -281,11 +292,9 @@ class Experiment(object):
             if batches_done % sample_interval == 0:
                 save_sample(batches_done, self.Generator, self.test_dataloader, self.name)
                 
-                if batches_done % (sample_interval*10) == 0:
+                if batches_done % (sample_interval*3) == 0:
                     torch.save(self.Generator.state_dict(), f"saved_models/{self.name}/generator{epoch}.pth",  _use_new_zipfile_serialization=False)
                     torch.save(self.Discriminator.state_dict(), f"saved_models/{self.name}/discriminator{epoch}.pth",  _use_new_zipfile_serialization=False)
-        
-        
         
             
 

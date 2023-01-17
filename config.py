@@ -13,7 +13,7 @@ nz = 100
 # load pretrained models
 load_pretrained_models = False
 # number of epochs of training
-n_epochs = 20000
+n_epochs = 2000
 # size of the batches - small so its accurate and nice, but sloww, but i have gpu :)
 batch_size = 16
 # name of the dataset
@@ -35,4 +35,7 @@ mask_size = 64
 # number of image channels
 channels = 3
 # interval between image sampling
-sample_interval = 20
+sample_interval = 100
+
+patch_h, patch_w = int(mask_size / 2 ** 3), int(mask_size / 2 ** 3)
+patch = (1, patch_h, patch_w)

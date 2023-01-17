@@ -11,8 +11,9 @@ class ImageDataset(Dataset, ):
         self.mask_size = mask_size
         self.mode = mode
         if overfittingStudy:
+            print("DATA: ", "%s/00000/000*.png" % root)
             self.files = sorted(glob.glob("%s/00000/000*.png" % root))
-            self.files = self.files[:-10] if mode == "train" else self.files[-30:-10] # see if overfits
+            self.files = self.files[:] if mode == "train" else self.files[-12:] # see if overfits
         else:
             self.files = sorted(glob.glob("%s/*/*.png" % root))
             self.files = self.files[:-3000] if mode == "train" else self.files[-3000:] # awful can not be like that - suff
