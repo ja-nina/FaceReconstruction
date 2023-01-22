@@ -1,15 +1,16 @@
 import torch.nn as nn
 from torchsummary import summary
-
-class Discriminator(nn.Module):
-    def __init__(self, channels=3):
+from models.BaseNetwork import BaseNetwork
+class Discriminator(BaseNetwork):
+    def __init__(self, channels=3, dropout = 0):
         super(Discriminator, self).__init__()
-
+        self.output_shape = (8,8)
         def discriminator_block(in_filters, out_filters, stride, normalize):
             """Returns layers of each discriminator block"""
             layers = [nn.Conv2d(in_filters, out_filters, 3, stride, 1)]
             if normalize:
                 layers.append(nn.InstanceNorm2d(out_filters))
+                layers.append(nn.Dropout(dropout))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
@@ -25,5 +26,4 @@ class Discriminator(nn.Module):
         self.model = nn.Sequential(*layers)
     def forward(self, img):
         res = self.model(img)
-        #print(res.shape)
         return res

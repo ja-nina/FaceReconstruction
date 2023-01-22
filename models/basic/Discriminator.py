@@ -1,9 +1,11 @@
 import torch.nn as nn
 from torchsummary import summary
+from models.BaseNetwork import BaseNetwork
 
-class Discriminator(nn.Module):
+class Discriminator(BaseNetwork):
     def __init__(self, channels=3):
         super(Discriminator, self).__init__()
+        self.output_shape = (8,8)
 
         def discriminator_block(in_filters, out_filters, stride, normalize):
             """Returns layers of each discriminator block"""
@@ -25,5 +27,4 @@ class Discriminator(nn.Module):
         self.model = nn.Sequential(*layers)
     def forward(self, img):
         res = self.model(img)
-        #print(res.shape)
         return res

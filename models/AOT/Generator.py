@@ -3,20 +3,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
-from models.AOT.BaseNetwork import BaseNetwork
+from models.BaseNetwork import BaseNetwork
 
 
 class Generator(BaseNetwork):
-    def __init__(self):  # 1046
+    def __init__(self, channels, dropout, out_channels = 3):  # 1046
         super(Generator, self).__init__()
+        self.channels=3
+        self.output_shape= (128,128)
 
         self.encoder = nn.Sequential(
             nn.ReflectionPad2d(3),
-            nn.Conv2d(3, 64, 7),
+            nn.Conv2d(channels + 1, 64, 7),
+            nn.Dropout(dropout),
             nn.ReLU(True),
             nn.Conv2d(64, 128, 4, stride=2, padding=1),
+            nn.Dropout(dropout),
             nn.ReLU(True),
             nn.Conv2d(128, 256, 4, stride=2, padding=1),
+            nn.Dropout(dropout),
             nn.ReLU(True)
         )
 
@@ -24,20 +29,23 @@ class Generator(BaseNetwork):
 
         self.decoder = nn.Sequential(
             UpConv(256, 128),
+            nn.Dropout(dropout),
             nn.ReLU(True),
             UpConv(128, 64),
+            nn.Dropout(dropout),
             nn.ReLU(True),
             nn.Conv2d(64, 3, 3, stride=1, padding=1)
         )
 
         self.init_weights()
 
-    def forward(self, x):
-        #x = torch.cat([x, mask], dim=1)
+    def forward(self, x, mask):
+        x = torch.cat((x, mask), dim=1)
         x = self.encoder(x)
         x = self.middle(x)
         x = self.decoder(x)
         x = torch.tanh(x)
+        #print("shape of generator: ", x.shape)
         return x
 
 

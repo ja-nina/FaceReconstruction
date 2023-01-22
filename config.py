@@ -13,13 +13,13 @@ nz = 100
 # load pretrained models
 load_pretrained_models = False
 # number of epochs of training
-n_epochs = 2000
+n_epochs = 200
 # size of the batches - small so its accurate and nice, but sloww, but i have gpu :)
 batch_size = 16
 # name of the dataset
 dataset_name = 'C:/Users/ismyn/UNI/SEM5/CV/FaceReconstruction/data'
 # adam: learning rate
-lr = 0.00008
+lr = 0.0008
 # adam: decay of first order momentum of gradient
 b1 = 0.5
 # adam: decay of first order momentum of gradient
@@ -35,7 +35,8 @@ mask_size = 64
 # number of image channels
 channels = 3
 # interval between image sampling
-sample_interval = 100
+sample_interval = 50
 
 patch_h, patch_w = int(mask_size / 2 ** 3), int(mask_size / 2 ** 3)
 patch = (1, patch_h, patch_w)
+patchUnet = (1, 128, 128)
