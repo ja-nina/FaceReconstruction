@@ -1,5 +1,6 @@
 import numpy as np
 import glob
+import random
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from PIL import Image
@@ -15,7 +16,12 @@ class ImageDataset(Dataset, ):
             self.files = self.files[:] if mode == "train" else self.files[-12:] # see if overfits
         else:
             self.files = sorted(glob.glob("%s/*/*.png" % root))
-            self.files = self.files[:-3000] if mode == "train" else self.files[-3000:] # awful can not be like that - suff
+            if mode == "train":
+                self.files = self.files[:-3000] 
+            elif mode == "pretrain":
+                self.files = random.choices(self.files, k=8000)
+            else:
+                self.files = self.files[-3000:] # awful can not be like that - suff
        
 
     def apply_random_mask(self, img):

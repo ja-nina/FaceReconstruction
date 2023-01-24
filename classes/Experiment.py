@@ -14,6 +14,7 @@ from config import n_cpu, dataset_name, channels, load_pretrained_models, mask_s
 from config import b1, b2, lr # for optimizers
 from tqdm import tqdm
 from scipy.stats import linregress
+from losses.Style_inclusive_loss import Style_inclusive_loss
 
 from models.basic_2.Discriminator import Discriminator as Discriminator_basic_2
 from models.basic_2.Generator import Generator as Generator_basic_2
@@ -21,8 +22,6 @@ from models.basic_2.Generator import Generator as Generator_basic_2
 cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 # Loss function
-adversarial_loss = torch.nn.MSELoss()
-pixelwise_loss = torch.nn.L1Loss()
 
 def weights_init_normal(m):
     classname = m.__class__.__name__
@@ -32,7 +31,7 @@ def weights_init_normal(m):
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
         
-def save_sample(batches_done, generator, test_dataloader, experiment_name, generate_whole_image):
+def save_sample(batches_done, generator, test_dataloader, experiment_name, generate_whole_image, imgs, masked_imgs, gen_parts_train, masks, epoch = "pretrain"):
     #print("Saving to:", f"images/{experiment_name}/{batches_done}.png")
     samples, masked_samples, i, masks = next(iter(test_dataloader))
     masks = Variable(masks.type(Tensor))
@@ -47,9 +46,13 @@ def save_sample(batches_done, generator, test_dataloader, experiment_name, gener
         filled_samples = gen_mask
     else:
         filled_samples[:, :, i : i + mask_size, i : i + mask_size] = gen_mask
-    # Save sample
+    # Save sample test
     sample = torch.cat((masked_samples.data, filled_samples.data, samples.data), -2)
-    save_image(sample, f"images/{experiment_name}/{batches_done}.png", nrow=6, normalize=True)
+    save_image(sample, f"images/{experiment_name}/{epoch}_{batches_done}.png", nrow=4, normalize=True)
+    
+    # save sample train
+    sample_train = torch.cat((masked_imgs.data, gen_parts_train.data, imgs.data), -2)
+    save_image(sample_train, f"images/{experiment_name}/{epoch}_{batches_done}_train.png", nrow=4, normalize=True)
 
 default_transforms =  [
     transforms.Resize((img_size, img_size), transforms.InterpolationMode.BICUBIC),
@@ -66,7 +69,8 @@ class Experiment(object):
                  pretrain = True, epochs = n_epochs,
                  dropout_generator = 0,
                  dropout_discriminator = 0, 
-                 generate_whole_image = False
+                 generate_whole_image = False,
+                 style_loss = False
                  ):
             
         self.name = name
@@ -87,7 +91,8 @@ class Experiment(object):
         self.epochs = epochs
         self.patch = None
         self.generate_whole_image = generate_whole_image
-        
+        self._Losses = None
+        self.style_loss = style_loss
         self._optimizer_type = optimizer
         patch_h, patch_w = int(mask_size / 2 ** 3), int(mask_size / 2 ** 3)
         self.patch = (1, patch_h, patch_w)
@@ -100,7 +105,13 @@ class Experiment(object):
         )
         self.test_dataloader = DataLoader(
             ImageDataset(dataset_name, transforms_=self.transforms_, mode="val", overfittingStudy=overfittingStudy),
-            batch_size=12,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=1,
+        )
+        self.test_dataloader_pretrain = DataLoader(
+            ImageDataset(dataset_name, transforms_=self.transforms_, mode = "pretrain", overfittingStudy=overfittingStudy),
+            batch_size=self.batch_size,
             shuffle=True,
             num_workers=1,
         )
@@ -139,7 +150,7 @@ class Experiment(object):
     
     @ExperimentLosses.setter
     def ExperimentLosses(self, *args):
-        #gen_adv_losses, gen_pixel_losses, disc_losses, counter
+        #gen_adv_losses, gen_content_losses, disc_losses, counter
         self._experiment_losses = args
         
     @property
@@ -158,6 +169,14 @@ class Experiment(object):
     def Optimizer_D(self, optimizer_d):
         self._optimizer_d = optimizer_d
         
+    @Losses.setter
+    def Losses(self, Losses):
+        self._Losses = Losses
+        
+    @property
+    def Losses(self):
+        return self._Losses
+    
         
     def get_models(self):
         pass
@@ -165,8 +184,12 @@ class Experiment(object):
     def get_loss(self):
         adversarial_loss = torch.nn.MSELoss()
         pixelwise_loss = torch.nn.L1Loss()
-        self.Losses = [adversarial_loss, pixelwise_loss]
-        return adversarial_loss, pixelwise_loss
+        if self.style_loss:
+            contentwise_loss = Style_inclusive_loss()
+        else:
+            contentwise_loss = pixelwise_loss
+        self.Losses = [adversarial_loss, contentwise_loss]
+        return adversarial_loss, contentwise_loss
     
     def get_optimizers(self):
         pass
@@ -175,7 +198,7 @@ class Experiment(object):
         return self.dataloader, self.test_dataloader
     
     def print_plots(self):
-        gen_adv_losses, gen_pixel_losses, disc_losses, counter = self.ExperimentLosses
+        gen_adv_losses, gen_content_losses, disc_losses, counter = self.ExperimentLosses
         
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=counter, y=gen_adv_losses, mode='lines', name='Gen Adv Loss'))
@@ -192,15 +215,15 @@ class Experiment(object):
         
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=counter, y=gen_pixel_losses, mode='lines', name='Gen Pixel Loss', marker_color='orange'))
+        fig.add_trace(go.Scatter(x=counter, y=gen_content_losses, mode='lines', name='Gen Content Loss', marker_color='orange'))
 
         fig.update_layout(
             width=1000,
             height=500,
-            title=self.name + ": Generator Pixel Loss",
+            title=self.name + ": Generator Content Loss",
             xaxis_title="Number of training examples seen",
-            yaxis_title="Gen Pixel Loss (L1 Loss)"),
-        fig.write_image(f"plots/{self.name}/Generator_Pixel_loss.png")
+            yaxis_title="Gen Content Loss (L1 Loss)"),
+        fig.write_image(f"plots/{self.name}/Generator_Content_loss.png")
         fig.show()
         
         fig = go.Figure()
@@ -233,8 +256,8 @@ class Experiment(object):
         torch.cuda.empty_cache()
         
         if load_pretrained_models:
-            self.Generator.load_state_dict(torch.load(f"saved_models/{self.name}/generator.pth"))
-            self.Discriminator.load_state_dict(torch.load(f"saved_models/{self.name}/discriminator.pth"))
+            self.Generator.load_state_dict(torch.load(f"saved_models/Vanilla_AOT/generator0.pth"))
+            self.Discriminator.load_state_dict(torch.load(f"saved_models/Vanilla_AOT/discriminator0.pth"))
             print("Using pre-trained Context-Encoder GAN model!")
         
         if cuda:
@@ -252,77 +275,66 @@ class Experiment(object):
             self.Optimizer_D = torch.optim.Adam(self.Discriminator.parameters(), lr=lr, betas=(b1, b2))
             
             
-    def balanceD_and_G(self):
+    def balanceD_and_G(self, batch_scors_G, batch_scores_D):
         '''
         Returns boolean values train_G and train_D
         '''
-        generator_loss, _, discriminator_loss, _ = self.ExperimentLosses
-        if len(discriminator_loss) < 6:
+        if len(batch_scors_G) < 16:
             return True, True
-        slope_scope = 5
-        discriminator_slope, _, _, _, _ = linregress(range(slope_scope), discriminator_loss[-slope_scope:])
-        generator_slope, _, _, _, _ = linregress(range(slope_scope), generator_loss[-slope_scope:])
-        if generator_slope > 0 or discriminator_loss[-1] < 0.2 or sum(discriminator_loss[-slope_scope:])/slope_scope < 0.15:
-            print("Train generator and not discriminator")
+        slope_scope = 15
+        discriminator_slope, _, _, _, _ = linregress(range(slope_scope), batch_scores_D[-slope_scope:])
+        generator_slope, _, _, _, _ = linregress(range(slope_scope), batch_scors_G[-slope_scope:])
+        if generator_slope > 0 or discriminator_slope < 0:
+            #print("Train generator and not discriminator")
             return True, False
         if discriminator_slope > 0:
-            print("Train generator and discriminator")
+            #print("Train generator and discriminator")
             return True, True
         else:
             return True, True
     
     
     def pretrainGenerator(self, epochs= 10, run = None):
-        loss = []
         print('Pretraining')
-        for epoch in range(epochs):
-            gen_pixel_loss = 0
-            tqdm_bar = tqdm(self.dataloader, desc=f'Training Epoch {epoch} ', total=int(len(self.dataloader)))
-            for i, (imgs, masked_imgs, masked_parts, masks) in enumerate(tqdm_bar):
+        gen_content_loss = 0
+        _, contentwise_loss = self.Losses
+        tqdm_bar = tqdm(self.test_dataloader_pretrain, desc=f'Pretrain ', total=int(len(self.test_dataloader_pretrain))) # pretrain on 200 random batches, not to go overboard
+        for i, (imgs, masked_imgs, masked_parts, masks) in enumerate(tqdm_bar):
             
-                # Adversarial ground truths
-                valid = Variable(Tensor(imgs.shape[0], *self.patch).fill_(1.0), requires_grad=False)
-                fake = Variable(Tensor(imgs.shape[0], *self.patch).fill_(0.0), requires_grad=False)
-   
-
-                # Configure input
-                imgs = Variable(imgs.type(Tensor))
-                masked_imgs = Variable(masked_imgs.type(Tensor))
-                masked_parts = Variable(masked_parts.type(Tensor))
-                masks = Variable(masks.type(Tensor))
-
-                ## Train Generator ##
-                self.Optimizer_G.zero_grad()
-
-                # Generate a batch of images
-                gen_parts = self.Generator(masked_imgs, masks)
-
-                if self.generate_whole_image:
-                    #g_adv = adversarial_loss(Variable(self.Discriminator(gen_parts).type(Tensor)), valid)
-                    g_pixel = pixelwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
-                else:
-                    g_pixel = pixelwise_loss(gen_parts, masked_parts)
-                    
-                g_pixel.backward()
-                self.Optimizer_G.step()
-                gen_pixel_loss += g_pixel.item()
+            # Configure input
+            imgs = Variable(imgs.type(Tensor))
+            masked_imgs = Variable(masked_imgs.type(Tensor))
+            masked_parts = Variable(masked_parts.type(Tensor))
+            masks = Variable(masks.type(Tensor))
+            ## Train Generator ##
+            self.Optimizer_G.zero_grad()
+            # Generate a batch of images
+            gen_parts = self.Generator(masked_imgs, masks)
+            if self.generate_whole_image:
+                #g_adv = adversarial_loss(Variable(self.Discriminator(gen_parts).type(Tensor)), valid)
+                g_content = contentwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
+            else:
+                g_content = contentwise_loss(gen_parts, masked_parts)
+                
+            g_content.backward()
+            self.Optimizer_G.step()
             if run is not None:
-                run["pretrain/gen_pixel_loss"].append( gen_pixel_loss)
-            loss.append(gen_pixel_loss)
-            save_sample("pretrain-x"+ str(epoch), self.Generator, self.test_dataloader, self.name, self.generate_whole_image)
-        print('End of pretraining')
-        return loss
-            
+                run["pretrain/gen_content_loss"].append(g_content)
+            if i%100 == 0:
+                save_sample("pretrain-x"+ str(i), self.Generator, self.test_dataloader, self.name, self.generate_whole_image, imgs, masked_imgs, gen_parts,masks )
+    print('End of pretraining')
             
 
-    def trainEpoch(self, epoch):
-        gen_adv_loss, gen_pixel_loss, disc_loss = 0, 0, 0
+    def trainEpoch(self, epoch, run):
+        adversarial_loss, contentwise_loss = self.Losses
+        gen_adv_loss, gen_content_loss, disc_loss = 0, 0, 0
+        batch_adv_scores_G, batch_adv_scores_D = [], [] 
         tqdm_bar = tqdm(self.dataloader, desc=f'Training Epoch {epoch} ', total=int(len(self.dataloader)))
-        gen_adv_losses, gen_pixel_losses, disc_losses, counter = self.ExperimentLosses
+        gen_adv_losses, gen_content_losses, disc_losses, counter = self.ExperimentLosses
         for i, (imgs, masked_imgs, masked_parts, masks) in enumerate(tqdm_bar):
             
             
-            train_G, train_D = self.balanceD_and_G()
+            train_G, train_D = self.balanceD_and_G(batch_adv_scores_G, batch_adv_scores_D)
             # Adversarial ground truths
             valid = Variable(Tensor(imgs.shape[0], *self.patch).fill_(1.0), requires_grad=False)
             fake = Variable(Tensor(imgs.shape[0], *self.patch).fill_(0.0), requires_grad=False)
@@ -348,12 +360,12 @@ class Experiment(object):
             g_adv = adversarial_loss(self.Discriminator(gen_parts).type(Tensor), valid)
             
             if self.generate_whole_image:
-                g_pixel = pixelwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
+                g_content = self.contentwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
             else:
                 
-                g_pixel = pixelwise_loss(gen_parts, masked_parts)
+                g_content = self.contentwise_loss(gen_parts, masked_parts)
             # Total loss
-            g_loss = 0.01 * g_adv + 0.99 * g_pixel
+            g_loss = 0.01 * g_adv + 0.99 * g_content
 
             g_loss.backward()
             self.Optimizer_G.step()
@@ -376,27 +388,34 @@ class Experiment(object):
             self.Optimizer_D.step()
             
             gen_adv_loss += g_adv.item()
-            gen_pixel_loss += g_pixel.item()
+            gen_content_loss += g_content.item()
             disc_loss += d_loss.item()
-        
-            self.ExperimentLosses = gen_adv_losses, gen_pixel_losses, disc_losses, counter
-            tqdm_bar.set_postfix(gen_adv_loss=gen_adv_loss/(i+1), gen_pixel_loss=gen_pixel_loss/(i+1), disc_loss=disc_loss/(i+1))
+            
+            batch_adv_scores_G.append(g_adv.item())
+            batch_adv_scores_D.append(d_loss.item())
+            
+            run["train/batch_disc_losses"].append(d_loss.item())
+            run["train/batch_gen_content_losses"].append(g_content.item())
+            run["train/batch_gen_adv_losses"].append(g_adv.item())
+            
+            tqdm_bar.set_postfix(gen_adv_loss=gen_adv_loss/(i+1), gen_content_loss=gen_content_loss/(i+1), disc_loss=disc_loss/(i+1))
             
             
             # Generate sample at sample interval
             batches_done = epoch * len(self.dataloader) + i
             if batches_done % sample_interval == 0:
-                save_sample(batches_done, self.Generator, self.test_dataloader, self.name, self.generate_whole_image)
+                save_sample(batches_done, self.Generator, self.test_dataloader, self.name, self.generate_whole_image,imgs, masked_imgs, gen_parts, masks, epoch )
                 
-                if batches_done % (sample_interval*3) == 0:
-                    torch.save(self.Generator.state_dict(), f"saved_models/{self.name}/generator{epoch}.pth",  _use_new_zipfile_serialization=False)
-                    torch.save(self.Discriminator.state_dict(), f"saved_models/{self.name}/discriminator{epoch}.pth",  _use_new_zipfile_serialization=False)
-        disc_losses.append(d_loss.item())
-        gen_adv_losses.append(g_adv.item())
-        gen_pixel_losses.append(g_pixel.item())
+                if batches_done % (sample_interval*15) == 0:
+                    torch.save(self.Generator.state_dict(), f"saved_models/{self.name}/generator{epoch}_{batches_done}.pth",  _use_new_zipfile_serialization=False)
+                    torch.save(self.Discriminator.state_dict(), f"saved_models/{self.name}/discriminator{epoch}_{batches_done}.pth",  _use_new_zipfile_serialization=False)
+        disc_losses.append(disc_loss)
+        gen_adv_losses.append(gen_adv_loss)
+        gen_content_losses.append(gen_content_loss)
         counter.append(i*self.batch_size + imgs.size(0) + epoch*len(self.dataloader.dataset))
+        self.ExperimentLosses = gen_adv_losses, gen_content_losses, disc_losses, counter
             
-        return gen_adv_losses, gen_pixel_losses, disc_losses
+        return gen_adv_losses, gen_content_losses, disc_losses
         
             
 

@@ -49,11 +49,9 @@ class UNet(BaseNetwork):
 
         expand = nn.Sequential(
                             torch.nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=padding),
-                            torch.nn.Dropout(dropout),
                             torch.nn.BatchNorm2d(out_channels),
                             torch.nn.ReLU(),
                             torch.nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=padding),
-                            torch.nn.Dropout(dropout),
                             torch.nn.BatchNorm2d(out_channels),
                             torch.nn.ReLU(),
                             torch.nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1) 

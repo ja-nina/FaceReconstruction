@@ -61,9 +61,9 @@ def train(MyExperiment: Experiment):
         MyExperiment.pretrainGenerator(run = run)
         
     for epoch in range(MyExperiment.epochs):
-        gen_adv_losses, gen_pixel_losses, disc_losses = MyExperiment.trainEpoch(epoch)
+        gen_adv_losses, gen_content_losses, disc_losses = MyExperiment.trainEpoch(epoch, run = run)
         run["train/disc_losses"].append(disc_losses[-1])
-        run["train/gen_pixel_losses"].append(gen_pixel_losses[-1])
+        run["train/gen_content_losses"].append(gen_content_losses[-1])
         run["train/gen_adv_losses"].append(gen_adv_losses[-1])
         
     run.stop()

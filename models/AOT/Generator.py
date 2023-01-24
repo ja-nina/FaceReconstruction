@@ -29,10 +29,8 @@ class Generator(BaseNetwork):
 
         self.decoder = nn.Sequential(
             UpConv(256, 128),
-            nn.Dropout(dropout),
             nn.ReLU(True),
             UpConv(128, 64),
-            nn.Dropout(dropout),
             nn.ReLU(True),
             nn.Conv2d(64, 3, 3, stride=1, padding=1)
         )
