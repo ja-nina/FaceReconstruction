@@ -11,7 +11,7 @@ Inpainting project done on https://paperswithcode.com/dataset/ffhq with custom i
 | ----------- | ----------- | ----------- |
 | Project type: inpainting      | 3       |  :white_check_mark: |
 | Additional problem: optimization of generator and discriminator training  | 1        |  :white_check_mark: |
-| Model: pre-trained model on the different problem      | 1       |  :x: |
+| Model: pre-trained model on the different problem      | 1       |  :white_check_mark: |
 | Model: non-trivial solution    | 1        |  :white_check_mark: |
 | Dataset: > 10000 photos      | 1       |  :white_check_mark: |
 | Dataset: own part > 500    | 1        |  :x: |
