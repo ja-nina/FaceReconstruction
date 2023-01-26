@@ -70,7 +70,8 @@ class Experiment(object):
                  dropout_generator = 0,
                  dropout_discriminator = 0, 
                  generate_whole_image = False,
-                 style_loss = False
+                 style_loss = False,
+                 balancing_length = 15
                  ):
             
         self.name = name
@@ -84,15 +85,15 @@ class Experiment(object):
         self.pretrain = pretrain
         self._generator = None
         self._discriminator = None
-        self._lossest = None
         self._experiment_losses = None
         self._optimizer_d = None
         self._optimizer_g = None
         self.epochs = epochs
         self.patch = None
         self.generate_whole_image = generate_whole_image
-        self._Losses = None
+        self._Mylosses = None
         self.style_loss = style_loss
+        self.balancig_length = balancing_length
         self._optimizer_type = optimizer
         patch_h, patch_w = int(mask_size / 2 ** 3), int(mask_size / 2 ** 3)
         self.patch = (1, patch_h, patch_w)
@@ -169,14 +170,6 @@ class Experiment(object):
     def Optimizer_D(self, optimizer_d):
         self._optimizer_d = optimizer_d
         
-    @Losses.setter
-    def Losses(self, Losses):
-        self._Losses = Losses
-        
-    @property
-    def Losses(self):
-        return self._Losses
-    
         
     def get_models(self):
         pass
@@ -263,6 +256,7 @@ class Experiment(object):
         if cuda:
             self.Generator.cuda()
             self.Discriminator.cuda()
+            #, loss2 = self.Losses
             self.Losses = [loss.cuda() for loss in self.Losses]
             
         self.ExperimentLosses = [],[],[],[]
@@ -275,20 +269,18 @@ class Experiment(object):
             self.Optimizer_D = torch.optim.Adam(self.Discriminator.parameters(), lr=lr, betas=(b1, b2))
             
             
-    def balanceD_and_G(self, batch_scors_G, batch_scores_D):
+    def balanceD_and_G(self, batches_done, batch_scors_G, batch_scores_D):
         '''
         Returns boolean values train_G and train_D
         '''
-        if len(batch_scors_G) < 16:
+        slope_scope = self.balancig_length
+        if len(batch_scors_G) < slope_scope:
             return True, True
-        slope_scope = 15
-        discriminator_slope, _, _, _, _ = linregress(range(slope_scope), batch_scores_D[-slope_scope:])
+        discriminator_slope, _, _, _, _ = linregress(range(slope_scope), batch_scores_D[-slope_scope:])  
         generator_slope, _, _, _, _ = linregress(range(slope_scope), batch_scors_G[-slope_scope:])
         if generator_slope > 0 or discriminator_slope < 0:
-            #print("Train generator and not discriminator")
             return True, False
         if discriminator_slope > 0:
-            #print("Train generator and discriminator")
             return True, True
         else:
             return True, True
@@ -329,12 +321,13 @@ class Experiment(object):
         adversarial_loss, contentwise_loss = self.Losses
         gen_adv_loss, gen_content_loss, disc_loss = 0, 0, 0
         batch_adv_scores_G, batch_adv_scores_D = [], [] 
-        tqdm_bar = tqdm(self.dataloader, desc=f'Training Epoch {epoch} ', total=int(len(self.dataloader)))
+        batch_number = len(self.dataloader)
+        tqdm_bar = tqdm(self.dataloader, desc=f'Training Epoch {epoch} ', total=int(batch_number))
         gen_adv_losses, gen_content_losses, disc_losses, counter = self.ExperimentLosses
         for i, (imgs, masked_imgs, masked_parts, masks) in enumerate(tqdm_bar):
             
             
-            train_G, train_D = self.balanceD_and_G(batch_adv_scores_G, batch_adv_scores_D)
+            train_G, train_D = self.balanceD_and_G(epoch*batch_number + i,  batch_adv_scores_G, batch_adv_scores_D)
             # Adversarial ground truths
             valid = Variable(Tensor(imgs.shape[0], *self.patch).fill_(1.0), requires_grad=False)
             fake = Variable(Tensor(imgs.shape[0], *self.patch).fill_(0.0), requires_grad=False)
@@ -360,7 +353,7 @@ class Experiment(object):
             g_adv = adversarial_loss(self.Discriminator(gen_parts).type(Tensor), valid)
             
             if self.generate_whole_image:
-                g_content = self.contentwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
+                g_content = contentwise_loss(gen_parts, imgs) # normally notimgs but  masked_paarts but 
             else:
                 
                 g_content = self.contentwise_loss(gen_parts, masked_parts)
@@ -402,7 +395,7 @@ class Experiment(object):
             
             
             # Generate sample at sample interval
-            batches_done = epoch * len(self.dataloader) + i
+            batches_done = epoch * batch_number + i
             if batches_done % sample_interval == 0:
                 save_sample(batches_done, self.Generator, self.test_dataloader, self.name, self.generate_whole_image,imgs, masked_imgs, gen_parts, masks, epoch )
                 

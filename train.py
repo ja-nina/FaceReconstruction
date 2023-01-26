@@ -110,15 +110,26 @@ if __name__ == '__main__':
     #                           dropout_generator = 0.1,
     #                           dropout_discriminator = 0.1,
     #                           epochs = n_epochs)
-    MyExperiment = Experiment(name = 'Overfit_Study_DoubleUnet',
-                              generator_models = [DoubleGenerator_UNet],
+    # MyExperiment = Experiment(name = 'Overfit_Study_DoubleUnet',
+    #                           generator_models = [DoubleGenerator_UNet],
+    #                           discriminator_models = [DoubleDiscriminator_UNet],
+    #                           generate_whole_image= True,
+    #                           overfittingStudy=True,
+    #                           pretrain = False,
+    #                           dropout_generator = 0.01,
+    #                           dropout_discriminator = 0.01,
+    #                           epochs = n_epochs)
+    
+    MyExperiment = Experiment(name = 'Vanilla_AOT_3_dropout_01_style_loss',
+                              generator_models = [BasicGenerator_AOT],
                               discriminator_models = [DoubleDiscriminator_UNet],
                               generate_whole_image= True,
-                              overfittingStudy=True,
-                              pretrain = False,
-                              dropout_generator = 0.01,
-                              dropout_discriminator = 0.01,
-                              epochs = n_epochs)
+                              overfittingStudy=False,
+                              pretrain = True,
+                              dropout_generator = 0.1,
+                              dropout_discriminator = 0.1,
+                              epochs = 5,
+                              style_loss=True)
     train(MyExperiment)
 
 
